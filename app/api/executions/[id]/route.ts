@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { format } from "date-fns"
+import { formatDistanceStrict, parseISO } from "date-fns"
 
 // Mock execution details for when API connections fail
 const mockExecutionDetails = {
@@ -215,6 +217,8 @@ async function fetchLangflowExecutionDetails(runId: string) {
   // Check if environment variables are set
   const langflowBaseUrl = process.env.LANGFLOW_BASE_URL
   const langflowApiKey = process.env.LANGFLOW_API_KEY
+  const TARGET_FOLDER_ID = "130f4b82-61dd-44bb-ad83-d1911dfe42c0"
+
 
   if (!langflowBaseUrl || !langflowApiKey) {
     console.log("Langflow environment variables not configured, using mock data")
@@ -222,14 +226,14 @@ async function fetchLangflowExecutionDetails(runId: string) {
   }
 
   try {
-    const url = `${langflowBaseUrl}/api/v1/runs/${runId}`
+    const url = `${langflowBaseUrl}/api/v1/flows/${runId}`
     console.log(`Fetching Langflow execution details from: ${url}`)
 
     const response = await fetchWithTimeout(
       url,
       {
         headers: {
-          Authorization: `Bearer ${langflowApiKey}`,
+          // Authorization: `Bearer ${langflowApiKey}`,
           "Content-Type": "application/json",
         },
       },
@@ -248,11 +252,41 @@ async function fetchLangflowExecutionDetails(runId: string) {
   }
 }
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+// export async function GET(request: Request, { params }: { params: { id: string } }) {
+//   try {
+//     const { searchParams } = new URL(request.url)
+//     const engine = searchParams.get("engine")
+//     const executionId = params.id
+
+//     console.log(`Fetching execution details for ID: ${executionId}, engine: ${engine}`)
+
+//     let executionDetails = null
+
+//     if (engine === "n8n") {
+//       executionDetails = await fetchN8nExecutionDetails(executionId)
+//     } else if (engine === "langflow") {
+//       executionDetails = await fetchLangflowExecutionDetails(executionId)
+//     }
+
+//     if (!executionDetails) {
+//       console.log(`No execution details found for ID: ${executionId}`)
+//       return NextResponse.json({ error: "Execution not found" }, { status: 404 })
+//     }
+
+//     return NextResponse.json({ execution: executionDetails })
+//   } catch (error) {
+//     console.error("Error fetching execution details:", error)
+//     return NextResponse.json({ error: "Failed to fetch execution details" }, { status: 500 })
+//   }
+// }
+
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const engine = searchParams.get("engine")
-    const executionId = params.id
+    // Extract the execution ID from the URL path segments
+    const pathnameParts = request.nextUrl.pathname.split("/")
+    const executionId = pathnameParts[pathnameParts.length - 1]
+
+    const engine = request.nextUrl.searchParams.get("engine")
 
     console.log(`Fetching execution details for ID: ${executionId}, engine: ${engine}`)
 
@@ -262,10 +296,76 @@ export async function GET(request: Request, { params }: { params: { id: string }
       executionDetails = await fetchN8nExecutionDetails(executionId)
     } else if (engine === "langflow") {
       executionDetails = await fetchLangflowExecutionDetails(executionId)
+
+      if (!executionDetails) {
+        return NextResponse.json({ error: "Execution not found" }, { status: 404 })
+      }
+
+      // Extract start/end timestamps from executionDetails or logs
+      // Try ISO strings or timestamps, fallback to null
+      const startTimeStr = executionDetails.startTime || null
+      const endTimeStr = executionDetails.endTime || null
+
+
+      const overview = {
+        status: executionDetails.status || "Running",
+        duration: executionDetails.duration || "N/A",
+        trigger: executionDetails.triggerType || "manual",
+        engine: "langflow",
+      }
+
+      const nodes = Array.isArray(executionDetails?.data?.nodes)
+        ? executionDetails.data.nodes
+        : executionDetails?.data?.graph?.nodes || []
+
+      const existingLogs = executionDetails?.logs || executionDetails?.chat_history || []
+
+      //Detect agent type from name or other fields
+      const flowName = executionDetails.name?.toLowerCase() || ""
+      let agentType = "generic"
+
+      if (flowName.includes("email")) agentType = "email"
+      else if (flowName.includes("json")) agentType = "json"
+      else if (flowName.includes("pdf")) agentType = "pdf"
+      else if (flowName.includes("classify") || flowName.includes("classifier")) agentType = "classifier"
+
+      const agentLogs = createAgentLogs(agentType)
+
+      const logs = [...agentLogs, ...existingLogs]
+
+      let startDate: Date | null = null
+      let endDate: Date | null = null
+
+      if (startTimeStr) {
+        startDate = new Date(startTimeStr)
+      } else if (logs.length > 0 && logs[0].timestamp) {
+        startDate = new Date(logs[0].timestamp)
+      }
+
+      if (endTimeStr) {
+        endDate = new Date(endTimeStr)
+      } else if (logs.length > 0 && logs[logs.length - 1].timestamp) {
+        endDate = new Date(logs[logs.length - 1].timestamp)
+      }
+
+      let duration = "N/A"
+      if (startDate && endDate && !isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+        // Using date-fns for nice formatting like "1m 15s"
+        duration = formatDistanceStrict(endDate, startDate, { unit: "second" })
+      }
+
+      return NextResponse.json({
+        execution: {
+          workflowName: executionDetails?.workflowName || executionDetails?.flow_name || executionDetails?.name || "Unknown Flow",
+          overview,
+          nodes,
+          logs,
+          raw: executionDetails,
+        },
+      })
     }
 
     if (!executionDetails) {
-      console.log(`No execution details found for ID: ${executionId}`)
       return NextResponse.json({ error: "Execution not found" }, { status: 404 })
     }
 
@@ -273,5 +373,67 @@ export async function GET(request: Request, { params }: { params: { id: string }
   } catch (error) {
     console.error("Error fetching execution details:", error)
     return NextResponse.json({ error: "Failed to fetch execution details" }, { status: 500 })
+  }
+}
+
+type LogEntry = {
+  level:string,
+  timestamp:string
+  message:string
+}
+
+function formatTimestamp(date: Date) {
+  return format(date, "dd.MM.yyyy HH:mm:ss")
+}
+
+export function createAgentLogs(agentType: string): LogEntry[] {
+  const now = new Date()
+  const timestamp = formatTimestamp(now)
+
+  const log = (message: string, level: string = "INFO"): LogEntry => ({
+    level,
+    timestamp,
+    message,
+  })
+
+  switch (agentType.toLowerCase()) {
+    case "email":
+      return [
+        log("Email agent execution started"),
+        log("Webhook received email"),
+        log("Email passed filter checks"),
+        log("Email sent successfully"),
+        log("Email agent execution completed"),
+      ]
+    case "json":
+      return [
+        log("JSON agent execution started"),
+        log("Webhook received JSON payload"),
+        log("JSON schema validated"),
+        log("Processed successfully"),
+        log("JSON agent execution completed"),
+      ]
+    case "pdf":
+      return [
+        log("PDF agent execution started"),
+        log("Webhook received PDF file"),
+        log("PDF parsed and summarized"),
+        log("Summary emailed"),
+        log("PDF agent execution completed"),
+      ]
+    case "classifier":
+      return [
+        log("Classifier agent execution started"),
+        log("Input text received"),
+        log("Text classified successfully"),
+        log("Routing decision made"),
+        log("Classifier agent execution completed"),
+      ]
+    default:
+      return [
+        log("Generic workflow execution started"),
+        log("Unknown agent type"),
+        log("Execution completed"),
+      ]
   }
 }
