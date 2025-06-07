@@ -21,6 +21,7 @@ const initialFolders: Folder[] = [
   { id: "unassigned", name: "Unassigned", workflowCount: 2, isDefault: true },
   { id: "marketing", name: "Marketing Automation", workflowCount: 2, isDefault: false },
   { id: "data-processing", name: "Data Processing", workflowCount: 2, isDefault: false },
+  { id: "agents", name: "Agents", workflowCount: 4, isDefault: false },
 ]
 
 export function OrchestrationDashboard() {
