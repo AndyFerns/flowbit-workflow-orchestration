@@ -10,10 +10,12 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { CheckCircle, XCircle, Clock, AlertTriangle, Info, ChevronDown, ChevronRight, Copy } from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
 interface ExecutionDetailsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  workflowName?: string
   executionId: string | null
   engine: string | null
 }
@@ -59,11 +61,18 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
 
       const data = await response.json()
 
+      // guard block to adjust for changing api structure
+      if (!data.execution) {
+        throw new Error("No execution data returned from API")
+      }
+
+      console.log("\nFetched execution (Langflow):", data.execution)
+
       // Check if we're using mock data (based on ID pattern or response structure)
       if (
         executionId.startsWith("mock-") ||
         (data.execution &&
-          (data.execution.id.startsWith("n8n-exec-") || data.execution.id.startsWith("langflow-exec-")))
+          (data.execution?.id?.startsWith("n8n-exec-") || data.execution?.id?.startsWith("langflow-exec-")))
       ) {
         setIsUsingMockData(true)
       } else {
@@ -82,9 +91,9 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
   const transformExecutionData = (data: any, engine: string): ExecutionDetails => {
     if (engine === "n8n") {
       return {
-        id: data.id,
-        workflowName: data.workflowData?.name || "Unknown Workflow",
-        status: data.finished ? (data.stoppedAt ? "success" : "error") : "running",
+        id: data?.id ?? "unknown",
+        workflowName: data.overview?.flow_name || data.workflowName || data.flow_name || "Unknown Flow",
+        status: data?.finished ? (data?.stoppedAt ? "success" : "error") : "running",
         startTime: new Date(data.startedAt)
           .toLocaleDateString("de-DE", {
             day: "2-digit",
@@ -107,7 +116,7 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
               })
               .replace(",", "")
           : undefined,
-        duration: data.finished
+        duration: data?.finished && data?.stoppedAt && data?.startedAt
           ? `${((new Date(data.stoppedAt).getTime() - new Date(data.startedAt).getTime()) / 1000).toFixed(1)}s`
           : "Running...",
         triggerType: data.mode || "manual",
@@ -126,7 +135,7 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
     } else if (engine === "langflow") {
       return {
         id: data.id,
-        workflowName: data.flow_name || "Unknown Flow",
+        workflowName: data.overview?.flow_name || data.workflowName || data.flow_name || "Unknown Flow",
         status: data.status === "SUCCESS" ? "success" : data.status === "ERROR" ? "error" : "running",
         startTime: new Date(data.timestamp)
           .toLocaleDateString("de-DE", {
@@ -138,7 +147,7 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
             second: "2-digit",
           })
           .replace(",", ""),
-        duration: data.duration ? `${data.duration.toFixed(1)}s` : "N/A",
+        duration: data.duration ? `${data.duration.toFixed(1)}s` : "Running...",
         triggerType: data.trigger_type || "manual",
         logs: data.logs || [],
         nodes: data.outputs
@@ -204,6 +213,9 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogTitle>
+            <VisuallyHidden>Loading Execution</VisuallyHidden>
+          </DialogTitle>
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7575e4]"></div>
           </div>
@@ -216,6 +228,9 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogTitle>
+            <VisuallyHidden>Error Loading Execution</VisuallyHidden>
+          </DialogTitle>
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
@@ -231,6 +246,9 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogTitle>
+            <VisuallyHidden>No Execution Details Found</VisuallyHidden>
+          </DialogTitle>    
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
@@ -265,7 +283,7 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
             </Badge>
           </DialogTitle>
           <DialogDescription>
-            Execution ID: {executionDetails.id} • Started: {executionDetails.startTime}
+            Execution ID: {executionDetails?.id ?? "NA"} • Started: {executionDetails?.startTime ?? "NA"}
           </DialogDescription>
         </DialogHeader>
 
@@ -364,9 +382,9 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
                                 <CardTitle className="text-sm">{node.name}</CardTitle>
                               </div>
                               <div className="flex items-center gap-2">
-                                {node.executionTime && <Badge variant="outline">{node.executionTime}ms</Badge>}
-                                <Badge variant={node.status === "error" ? "destructive" : "default"}>
-                                  {node.status}
+                                {node?.executionTime != null && <Badge variant="outline">{node.executionTime}ms</Badge>}
+                                <Badge variant={node?.status === "error" ? "destructive" : "default"}>
+                                  {node?.status ?? "unknown"}
                                 </Badge>
                               </div>
                             </div>
@@ -435,7 +453,7 @@ export function ExecutionDetailsModal({ open, onOpenChange, executionId, engine 
                           </Badge>
                           <div className="flex-1">
                             <div className="text-xs text-gray-500 mb-1">
-                              {log.timestamp || executionDetails.startTime}
+                              {log?.timestamp ?? executionDetails?.startTime ?? "N/A"}
                             </div>
                             <pre
                               className={`text-sm whitespace-pre-wrap ${
