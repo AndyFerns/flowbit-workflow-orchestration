@@ -21,6 +21,25 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ExecutionDetailsModal } from "@/components/execution-details-modal"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import TriggerWorkflowModal from "@/components/trigger-workflow-modal"
+
+// import {
+//   Dialog,
+//   DialogContent,
+//   DialogDescription,
+//   DialogHeader,
+//   DialogTitle,
+// } from "@/components/ui/dialog"
+
+// import {
+//   Tabs,
+//   TabsContent,
+//   TabsList,
+//   TabsTrigger,
+// } from "@/components/ui/tabs"
+// import { Textarea } from "@/components/ui/textarea"
+// import { ScrollArea } from "@/components/ui/scroll-area"
+// import { Copy } from "lucide-react"
 
 interface Execution {
   id: string
@@ -50,11 +69,13 @@ export function ExecutionsDashboard({ selectedFolder }: ExecutionsDashboardProps
   const [selectedExecution, setSelectedExecution] = useState<{ id: string; engine: string } | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const [isUsingMockData, setIsUsingMockData] = useState(false)
+  const [isTriggerModalOpen, setIsTriggerModalOpen] = useState(false)  //track trigger model opening 
+  const [triggerContext, setTriggerContext] = useState<{ workflowId: string; engine: string } | null>(null)
 
   useEffect(() => {
     fetchExecutions()
     // Set up polling for real-time updates
-    const interval = setInterval(fetchExecutions, 30000) // Refresh every 30 seconds
+    const interval = setInterval(fetchExecutions, 120000) // Refresh every 30 seconds
     return () => clearInterval(interval)
   }, [])
 
@@ -183,25 +204,52 @@ export function ExecutionsDashboard({ selectedFolder }: ExecutionsDashboardProps
     }
   }
 
-  const handleTriggerWorkflow = async (workflowId: string, engine: string) => {
+  const handleTriggerWorkflow = async (workflowId: string, engine: string, triggerType:string, inputPayload: any={}) => {
+    // setTriggerStatus({ status: "idle", message: "" })
     try {
       const response = await fetch("/api/trigger", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ workflowId, engine }),
+        body: JSON.stringify({ 
+          workflowId, 
+          engine,
+          // triggerType: triggerTab, // "manual" | "webhook" | "schedule"
+          inputPayload, 
+        }),
       })
 
       if (response.ok) {
         // Refresh executions after triggering
         setTimeout(() => fetchExecutions(true), 2000)
+      } else {
+        const data = await response.json()
+        // setTriggerStatus({ status: "success", message: `Triggered successfully. Run ID: ${data.runId || "N/A"}` })
       }
     } catch (error) {
       console.error("Error triggering workflow:", error)
     }
   }
 
+  const openTriggerModal = (workflowId: string, engine: string) => {
+    setTriggerContext({ workflowId, engine })
+    setIsTriggerModalOpen(true)
+  }
+
+  const closeTriggerModal = () => {
+    setTriggerContext(null)
+    setIsTriggerModalOpen(false)
+  }
+
+  function safeParseJSON(str: string): any {
+    try {
+      return JSON.parse(str)
+    } catch (e) {
+      alert("Invalid JSON input.")
+      throw e
+    }
+  }
   const handleViewDetails = (executionId: string, engine: string) => {
     setSelectedExecution({ id: executionId, engine })
     setDetailsModalOpen(true)
@@ -405,7 +453,7 @@ export function ExecutionsDashboard({ selectedFolder }: ExecutionsDashboardProps
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleTriggerWorkflow(execution.workflowId, execution.engine)}
+                          onClick={() => openTriggerModal(execution.workflowId, execution.engine)}
                           className="h-8"
                         >
                           <Play className="w-3 h-3 mr-1" />
@@ -484,6 +532,14 @@ export function ExecutionsDashboard({ selectedFolder }: ExecutionsDashboardProps
         onOpenChange={setDetailsModalOpen}
         executionId={selectedExecution?.id || null}
         engine={selectedExecution?.engine || null}
+      />
+
+      <TriggerWorkflowModal
+        isOpen={isTriggerModalOpen}
+        onOpenChange={setIsTriggerModalOpen}
+        triggerContext={triggerContext}
+        closeTriggerModal={closeTriggerModal}
+        handleTriggerWorkflow={handleTriggerWorkflow}
       />
     </div>
   )
