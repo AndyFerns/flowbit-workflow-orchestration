@@ -114,6 +114,78 @@ const mockLangflowExecutions = [
       error: "API rate limit exceeded",
     },
   },
+
+  {
+    id: "langflow-exec-4",
+    workflowId: "wf-7",
+    workflowName: "Classifier Agent",
+    engine: "langflow",
+    status: "success",
+    duration: "35.2s",
+    startTime: "15.01.2025 14:20:08",
+    triggerType: "schedule",
+    folderId: "agents",
+    executionData: {
+      outputs: {
+        "Data Source": { status: "success", data: { records: 1250 } },
+        Transform: { status: "success", data: { transformations: ["join", "filter"] } },
+      },
+    },
+  },
+  {
+    id: "langflow-exec-5",
+    workflowId: "wf-8",
+    workflowName: "Email Agent",
+    engine: "langflow",
+    status: "success",
+    duration: "27.2s",
+    startTime: "15.01.2025 14:20:08",
+    triggerType: "manual",
+    folderId: "agents",
+   executionData: {
+      data: {
+        resultData: {
+          runData: {
+            "Data Fetch": [{ data: { records: 500 }, executionTime: 1200 }],
+          },
+        },
+      },
+    },
+  },
+  {
+    id: "langflow-exec-6",
+    workflowId: "wf-9",
+    workflowName: "PDF Agent",
+    engine: "langflow",
+    status: "success",
+    duration: "17.6s",
+    startTime: "15.01.2025 14:20:08",
+    triggerType: "webhook",
+    folderId: "agents",
+    executionData: {
+      outputs: {
+        "Data Source": { status: "success", data: { records: 1800 } },
+        Transform: { status: "success", data: { transformations: ["join", "filter"] } },
+      },
+    },
+  },
+  {
+    id: "langflow-exec-7",
+    workflowId: "wf-10",
+    workflowName: "JSON Agent",
+    engine: "langflow",
+    status: "success",
+    duration: "35.2s",
+    startTime: "15.01.2025 14:20:08",
+    triggerType: "schedule",
+    folderId: "agents",
+    executionData: {
+      outputs: {
+        "Data Source": { status: "success", data: { records: 1250 } },
+        Transform: { status: "success", data: { transformations: ["join", "filter"] } },
+      },
+    },
+  },
 ]
 
 // Create a timeout promise
@@ -206,76 +278,137 @@ async function fetchN8nExecutions() {
 }
 
 // Langflow API integration with improved error handling
+// async function fetchLangflowExecutions() {
+//   // Check if environment variables are set
+//   const langflowBaseUrl = process.env.LANGFLOW_BASE_URL
+//   const langflowApiKey = process.env.LANGFLOW_API_KEY
+//   const TARGET_FOLDER_ID = "130f4b82-61dd-44bb-ad83-d1911dfe42c0"
+
+//   console.log("Langflow Configuration:", {
+//     baseUrl: langflowBaseUrl ? "Set" : "Not set",
+//     apiKey: langflowApiKey ? "Set" : "Not set",
+//   })
+
+//   if (!langflowBaseUrl || !langflowApiKey) {
+//     console.log("Langflow environment variables not configured, using mock data")
+//     return mockLangflowExecutions
+//   }
+
+//   try {
+//     const url = `${langflowBaseUrl}/api/v1/flows/`
+//     console.log(`Attempting to fetch Langflow executions from: ${url}`)
+
+//     const response = await fetchWithTimeout(
+//       url,
+//       {
+//         headers: {
+//           // Authorization: `Bearer ${langflowApiKey}`,
+//           "Content-Type": "application/json",
+//         },
+//       },
+//       5000,
+//     ) // 5 second timeout
+
+//     console.log(`Langflow API Response Status: ${response.status}`)
+
+//     if (!response.ok) {
+//       throw new Error(`Langflow API error: ${response.status} ${response.statusText}`)
+//     }
+
+//     const data = await response.json()
+//     const filtered_data = data.filter((data: any) => data.folderId === TARGET_FOLDER_ID)
+
+//     console.log(`Langflow API returned ${data.runs?.length || 0} executions`)
+
+//     return filtered_data.runs.map((run: any) => ({
+//       id: run.id,
+//       workflowId: run.flow_id,
+//       workflowName: run.flow_name || "Unknown Flow",
+//       engine: "langflow",
+//       status: run.status === "SUCCESS" ? "success" : run.status === "ERROR" ? "error" : "running",
+//       duration: run.duration ? `${run.duration.toFixed(1)}s` : "N/A",
+//       startTime: new Date(run.timestamp)
+//         .toLocaleDateString("de-DE", {
+//           day: "2-digit",
+//           month: "2-digit",
+//           year: "numeric",
+//           hour: "2-digit",
+//           minute: "2-digit",
+//           second: "2-digit",
+//         })
+//         .replace(",", ""),
+//       triggerType: run.trigger_type || "manual",
+//       folderID: TARGET_FOLDER_ID,
+//       // folderId: run.tags?.[0] || "unassigned",
+//       executionData: run,
+//     }))
+//   } catch (error) {
+//     console.error("Error fetching Langflow executions:", error)
+//     console.log("Falling back to mock Langflow execution data")
+//     return mockLangflowExecutions
+//   }
+// }
+
 async function fetchLangflowExecutions() {
-  // Check if environment variables are set
   const langflowBaseUrl = process.env.LANGFLOW_BASE_URL
-  const langflowApiKey = process.env.LANGFLOW_API_KEY
+  const TARGET_FOLDER_ID = "130f4b82-61dd-44bb-ad83-d1911dfe42c0"
 
-  console.log("Langflow Configuration:", {
-    baseUrl: langflowBaseUrl ? "Set" : "Not set",
-    apiKey: langflowApiKey ? "Set" : "Not set",
-  })
-
-  if (!langflowBaseUrl || !langflowApiKey) {
-    console.log("Langflow environment variables not configured, using mock data")
+  if (!langflowBaseUrl) {
+    console.log("Langflow environment variable not configured, using mock data")
     return mockLangflowExecutions
   }
 
   try {
-    const url = `${langflowBaseUrl}/api/v1/runs`
-    console.log(`Attempting to fetch Langflow executions from: ${url}`)
+    const url = `${langflowBaseUrl}/api/v1/flows/`
+    console.log(`Attempting to fetch Langflow flows from: ${url}`)
 
     const response = await fetchWithTimeout(
       url,
       {
         headers: {
-          Authorization: `Bearer ${langflowApiKey}`,
           "Content-Type": "application/json",
         },
       },
       5000,
-    ) // 5 second timeout
-
-    console.log(`Langflow API Response Status: ${response.status}`)
+    )
 
     if (!response.ok) {
       throw new Error(`Langflow API error: ${response.status} ${response.statusText}`)
     }
 
     const data = await response.json()
-    console.log(`Langflow API returned ${data.runs?.length || 0} executions`)
+    const filteredFlows = data.filter((flow: any) => flow.folder_id === TARGET_FOLDER_ID)
 
-    return data.runs.map((run: any) => ({
-      id: run.id,
-      workflowId: run.flow_id,
-      workflowName: run.flow_name || "Unknown Flow",
+    console.log(`Langflow API returned ${filteredFlows.length} flows`)
+
+    return filteredFlows.map((flow: any) => ({
+      id: flow.id,
+      workflowId: flow.id,
+      workflowName: flow.name || "Unnamed Flow",
       engine: "langflow",
-      status: run.status === "SUCCESS" ? "success" : run.status === "ERROR" ? "error" : "running",
-      duration: run.duration ? `${run.duration.toFixed(1)}s` : "N/A",
-      startTime: new Date(run.timestamp)
-        .toLocaleDateString("de-DE", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })
-        .replace(",", ""),
-      triggerType: run.trigger_type || "manual",
-      folderId: run.tags?.[0] || "unassigned",
-      executionData: run,
+      status: "unknown",
+      duration: "N/A",
+      startTime: new Date(flow.updated_at || flow.created_at).toLocaleString("de-DE", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
+      triggerType: "manual",
+      folderID: TARGET_FOLDER_ID,
+      executionData: flow,
     }))
   } catch (error) {
     console.error("Error fetching Langflow executions:", error)
-    console.log("Falling back to mock Langflow execution data")
     return mockLangflowExecutions
   }
 }
 
 export async function GET() {
   try {
-    console.log("=== Fetching executions from all sources ===")
+    console.log("\n\n=== Fetching executions from all sources ===\n")
 
     // Use Promise.allSettled to handle cases where one API fails but the other succeeds
     const [n8nResult, langflowResult] = await Promise.allSettled([fetchN8nExecutions(), fetchLangflowExecutions()])
