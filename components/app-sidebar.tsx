@@ -51,6 +51,12 @@ export function AppSidebar({ selectedFolder, onFolderSelect, onManageFolders, fo
       { id: "wf-5", name: "ETL Pipeline", engine: "langflow" },
       { id: "wf-6", name: "Report Generator", engine: "n8n" },
     ],
+    agents: [
+      { id: "wf-7", name: "Classifier Agent", engine: "langflow" },
+      { id: "wf-8", name: "Email Agent", engine: "langflow" },
+      { id: "wf-9", name: "PDF Agent", engine: "langflow" },
+      { id: "wf-10", name: "JSON Agent", engine: "langflow" }
+    ],
   }
 
   // Function to get workflows for a folder
